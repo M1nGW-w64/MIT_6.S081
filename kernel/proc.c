@@ -120,6 +120,16 @@ found:
   p->pid = allocpid();
   p->state = USED;
 
+  // Allocate a read-only page
+#ifdef LAB_PGTBL
+  if ((p->u_call = (struct usyscall *)kalloc()) == 0) {
+    freeproc(p);
+    release(&p->lock);
+    return 0;
+  }
+  p->u_call->pid = p->pid;
+#endif
+
   // Allocate a trapframe page.
   if((p->trapframe = (struct trapframe *)kalloc()) == 0){
     freeproc(p);
@@ -150,6 +160,11 @@ found:
 static void
 freeproc(struct proc *p)
 {
+#ifdef LAB_PGTBL
+  if(p->u_call)
+    kfree((void*)p->u_call);
+  p->u_call = 0;
+#endif
   if(p->trapframe)
     kfree((void*)p->trapframe);
   p->trapframe = 0;
@@ -196,6 +211,20 @@ proc_pagetable(struct proc *p)
     return 0;
   }
 
+  // map the USYSCALL a read-only page
+  // R - read   
+  // U - user(?)
+#ifdef LAB_PGTBL
+  if (mappages(pagetable, USYSCALL, PGSIZE, 
+                (uint64)(p->u_call), PTE_R | PTE_U) < 0) {
+    uvmunmap(pagetable, TRAMPOLINE, 1, 0);
+    uvmunmap(pagetable, TRAPFRAME, 1, 0);
+    uvmunmap(pagetable, USYSCALL, 1, 0);
+    uvmfree(pagetable, 0);
+    return 0;
+  }
+#endif
+
   return pagetable;
 }
 
@@ -206,6 +235,9 @@ proc_freepagetable(pagetable_t pagetable, uint64 sz)
 {
   uvmunmap(pagetable, TRAMPOLINE, 1, 0);
   uvmunmap(pagetable, TRAPFRAME, 1, 0);
+#ifdef LAB_PGTBL  
+  uvmunmap(pagetable, USYSCALL, 1, 0);
+#endif
   uvmfree(pagetable, sz);
 }
 

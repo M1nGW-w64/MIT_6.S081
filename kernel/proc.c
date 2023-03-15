@@ -294,6 +294,7 @@ fork(void)
 
   // Cause fork to return 0 in the child.
   np->trapframe->a0 = 0;
+  np->syscall_num = p->syscall_num;
 
   // increment reference counts on open file descriptors.
   for(i = 0; i < NOFILE; i++)
@@ -653,4 +654,21 @@ procdump(void)
     printf("%d %s %s", p->pid, state, p->name);
     printf("\n");
   }
+}
+
+
+// Return num of not unused proc
+// Find avaliable proc in proc table
+int 
+getprocnum(void) 
+{
+  int num = 0;
+  struct proc *p;
+  for (p = proc; p < &proc[NPROC]; p++) {    
+    acquire(&p->lock);
+    if (p->state != UNUSED) 
+      ++num;
+    release(&p->lock);
+  }
+  return num;
 }
